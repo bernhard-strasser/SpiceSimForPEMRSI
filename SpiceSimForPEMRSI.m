@@ -41,6 +41,14 @@ SpiceExample_flag = true;
 
 load('InData.mat');
 
+% Take only some Metabolites
+TakeOnlyMetabos = [20 21 23];
+InData.Maps.Metabos = InData.Maps.Metabos(:,:,1,TakeOnlyMetabos);
+
+% Convert B0-map ppm --> Hz
+InData.Maps.B0 = InData.Maps.B0 * Par.LarmorFreq / 10^6;
+% Also overwrite two B0-values which are outliers
+InData.Maps.B0(42,18) = 9.808; InData.Maps.B0(43,18) = 11.591;
 
 Tmp = Simulate_FID_Spectra(3.21,4.65,0,0,0.03,0.1*9,0,1/Par.SBW,Par.vecSize,Par.LarmorFreq);            % Cho 
 InData.SpecComp(1,:) = Tmp(2,:);
@@ -158,19 +166,40 @@ if(DenoisingExample_flag)
     ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs)
     Results_GroundTruth = Results;
 
+    
+   %% NAA, Cr, Cho, Enforce rank < 3
+
+    PickComponents = 1:3;
+    NoOfMetabos = numel(PickComponents);
+    AssumedRank = 1;
+
+    CurMap = InData.Maps.Metabos(:,:,:,PickComponents); CurMap = reshape(CurMap,[numel(CurMap)/NoOfMetabos NoOfMetabos]);
+    S = reshape(CurMap * InData.SpecComp(PickComponents,:),Par.DataSize);
+
+    % Denoise
+    [U,Sigma,V] = svd(reshape(S,[Par.Nx*Par.Ny Par.vecSize]),'econ');
+    S = U(:,1:AssumedRank) * Sigma(1:AssumedRank,1:AssumedRank) * V(:,1:AssumedRank)';
+    S = reshape(S,Par.DataSize); clear CurMap
+
+    Results = CalcResults(S,InData.Maps.Mask,Par,CalcMapsSetts,ppmvec,Results_GroundTruth);
+    SaveFigs.Name = 'NAACrCho_EnforceRank2';
+    ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs)
+
+    
 
 
     %% NAA, Cr, Cho + B0-Inhomogeneity
 
     PickComponents = 1:3;
     NoOfMetabos = numel(PickComponents);
+    B0Scale = 1.5; % How strong the B0 should be simulated. If 1, it's the (measured) LCMode-shift map
 
     CurMap = InData.Maps.Metabos(:,:,:,PickComponents); CurMap = reshape(CurMap,[numel(CurMap)/NoOfMetabos NoOfMetabos]);
     S = reshape(CurMap * InData.SpecComp(PickComponents,:),Par.DataSize); clear CurMap
 
     % B0-Effect
     time   = (0:Par.vecSize-1)*(1/Par.SBW);
-    B0CorrMat_Spec = exp(2*pi*1i*InData.Maps.B0 .* reshape(time,[1 1 1 numel(time)]));
+    B0CorrMat_Spec = exp(2*pi*1i*InData.Maps.B0*B0Scale .* reshape(time,[1 1 1 numel(time)]));
     S = S .* B0CorrMat_Spec;
     clear B0CorrMat_Spec time;
 
@@ -179,6 +208,38 @@ if(DenoisingExample_flag)
     SaveFigs.Name = 'NAACrCho_B0';
     ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs)
 
+    figure; imagesc(InData.Maps.B0*B0Scale);
+    
+    
+    %% NAA, Cr, Cho + B0-Inhomogeneity. Enforce rank = 3
+
+    PickComponents = 1:3;
+    NoOfMetabos = numel(PickComponents);
+    AssumedRank = NoOfMetabos;
+    B0Scale = 1.5; % How strong the B0 should be simulated. If 1, it's the (measured) LCMode-shift map
+    
+    
+    CurMap = InData.Maps.Metabos(:,:,:,PickComponents); CurMap = reshape(CurMap,[numel(CurMap)/NoOfMetabos NoOfMetabos]);
+    S = reshape(CurMap * InData.SpecComp(PickComponents,:),Par.DataSize); clear CurMap
+
+    % B0-Effect
+    time   = (0:Par.vecSize-1)*(1/Par.SBW);
+    B0CorrMat_Spec = exp(2*pi*1i*InData.Maps.B0*B0Scale .* reshape(time,[1 1 1 numel(time)]));
+    S = S .* B0CorrMat_Spec;
+    clear B0CorrMat_Spec time;
+
+    
+    % Denoise
+    [U,Sigma,V] = svd(reshape(S,[Par.Nx*Par.Ny Par.vecSize]),'econ');
+    S = U(:,1:AssumedRank) * Sigma(1:AssumedRank,1:AssumedRank) * V(:,1:AssumedRank)';
+    S = reshape(S,Par.DataSize); clear CurMap
+    
+
+    Results = CalcResults(S,InData.Maps.Mask,Par,CalcMapsSetts,ppmvec,Results_GroundTruth);
+    SaveFigs.Name = 'NAACrCho_B0_EnforceRank3';
+    ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs)
+
+    figure; imagesc(InData.Maps.B0*B0Scale); colorbar
 
 
 
@@ -195,6 +256,25 @@ if(DenoisingExample_flag)
     SaveFigs.Name = 'NAACrCho_ResWater';
     ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs)
 
+    
+    %% NAA, Cr, Cho + residual water. Enforce rank = 3
+
+    PickComponents = 1:13;
+    NoOfMetabos = numel(PickComponents);
+    AssumedRank = 3;
+
+    CurMap = InData.Maps.Metabos(:,:,:,PickComponents); CurMap = reshape(CurMap,[numel(CurMap)/NoOfMetabos NoOfMetabos]);
+    S = reshape(CurMap * InData.SpecComp(PickComponents,:),Par.DataSize); clear CurMap
+
+    % Denoise
+    [U,Sigma,V] = svd(reshape(S,[Par.Nx*Par.Ny Par.vecSize]),'econ');
+    S = U(:,1:AssumedRank) * Sigma(1:AssumedRank,1:AssumedRank) * V(:,1:AssumedRank)';
+    S = reshape(S,Par.DataSize); clear CurMap
+    
+    Results = CalcResults(S,InData.Maps.Mask,Par,CalcMapsSetts,ppmvec,Results_GroundTruth);
+    SaveFigs.Name = 'NAACrCho_ResWater_EnforceRank3';
+    ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs)
+    
 
 
     %% NAA, Cr, Cho + Noise
@@ -232,6 +312,8 @@ if(DenoisingExample_flag)
     SaveFigs.Name = ['NAACrCho_Noise_Scale' num2str(NoiseScale) '_Denoised'];
 
     ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs)
+    
+
 end
 
 
