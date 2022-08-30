@@ -73,7 +73,7 @@ freeVersion = freeVersion(regexp(freeVersion,'[\d+\.]+\d+'):end);
 freeVersion = strsplit(freeVersion,'.');
 freeVersion = str2double(regexprep(freeVersion,'\D',''));
 
-if(isnan(freeVersion) || freeVersion(1) > 3 || freeVersion(2) > 3 || freeVersion(3) > 9)
+if(any(isnan(freeVersion)) || freeVersion(1) > 3 || freeVersion(2) > 3 || freeVersion(3) > 9)
     [stat,memfree] = unix('free -m | awk ''NR==2'' | awk ''{print $7}''');     
 else
     [stat,memfree] = unix('free -m | awk ''NR==3'' | awk ''{print $4}''');  % unix just performs the unix-command. perform free -g command,

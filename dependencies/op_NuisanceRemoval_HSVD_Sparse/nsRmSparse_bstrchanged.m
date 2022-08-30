@@ -8,6 +8,9 @@ function [ dWL, dWrLr, output, params ] = nsRmSparse_bstrchanged( d, params )
     if ~isfield(params,'tD2')
         params.tD2                 = params.tD1;
     end
+    if(~isfield(params,'ShowSpectra_flag'))
+        params.ShowSpectra_flag = false; 
+    end
     params.NtTr                    = length(params.tD2);
     NyD1                           = params.ND1(1);
     NxD1                           = params.ND1(2);
@@ -328,6 +331,51 @@ function [ dWL, dWrLr, output, params ] = nsRmSparse_bstrchanged( d, params )
 %     output.xtW                     = fftshift(fftshift(output.xtW,1),2);
 %     output.xtL                     = fftshift(fftshift(output.xtL,1),2);
 %     output.xtM                     = fftshift(fftshift(output.xtM,1),2);
+
+
+
+    if(params.ShowSpectra_flag)
+        fabsorreal = @real;
+        figure; 
+        Rows = ceil(sqrt(numel(params.ShowVoxels)));
+        Cols = ceil(numel(params.ShowVoxels)./Rows);
+        for CurVox = 1:numel(params.ShowVoxels)
+            subplot(Rows,Cols,CurVox)
+            if(numel(params.ShowVoxels{CurVox}) < 3)
+                params.ShowVoxels{CurVox}(3:4) = 1;
+            end
+            if(numel(params.ShowVoxels{CurVox}) < 4)
+                params.ShowVoxels{CurVox}(4) = 1;
+            end
+%             UndersampledDt = params.D1RecoPar.Dwelltimes(1)/10^9*round(params.D1RecoPar.vecSize/size(d,5));
+%             chemy = compute_chemshift_vector_1_2(params.D1RecoPar.LarmorFreq,UndersampledDt,size(d,5));
+%             plot(chemy,squeeze(feval(fabsorreal,fftshift(fft(d(params.ShowVoxels{CurVox}(1),params.ShowVoxels{CurVox}(2),params.ShowVoxels{CurVox}(3),params.ShowVoxels{CurVox}(4),:,1))))))
+%             hold on
+%             plot(chemy,squeeze(feval(fabsorreal,fftshift(fft(dWL(params.ShowVoxels{CurVox}(1),params.ShowVoxels{CurVox}(2),params.ShowVoxels{CurVox}(3),params.ShowVoxels{CurVox}(4),:,1))))),'r')
+%             plot(chemy,squeeze(feval(fabsorreal,fftshift(fft(d(params.ShowVoxels{CurVox}(1),params.ShowVoxels{CurVox}(2),params.ShowVoxels{CurVox}(3),params.ShowVoxels{CurVox}(4),:,1))) - fftshift(fft(dWL(params.ShowVoxels{CurVox}(1),params.ShowVoxels{CurVox}(2),params.ShowVoxels{CurVox}(3),params.ShowVoxels{CurVox}(4),:,1))))),'g')
+%             hold off
+%             title(sprintf('(%d,%d,%d,%d)', params.ShowVoxels{CurVox}(1), params.ShowVoxels{CurVox}(2), params.ShowVoxels{CurVox}(3), params.ShowVoxels{CurVox}(4)))
+            
+            tmpIn = zeros([size_MultiDims(d,1:3) size(output.xtWL,4)]);
+            tmpIn(params.Operators.SamplingOperator(:)) = d;
+            tmpOut = zeros([size_MultiDims(d,1:3) size(output.xtWL,4)]);
+            tmpOut(params.Operators.SamplingOperator(:)) = dWrLr;
+            UndersampledDt = params.D1RecoPar.Dwelltimes(1)/10^9;
+            chemy = compute_chemshift_vector_1_2(params.D1RecoPar.LarmorFreq,UndersampledDt,size(tmpOut,4));
+            plot(chemy,squeeze(feval(fabsorreal,fftshift(fft(tmpIn(params.ShowVoxels{CurVox}(1),params.ShowVoxels{CurVox}(2),params.ShowVoxels{CurVox}(3),:,params.ShowVoxels{CurVox}(4),1))))))
+            hold on
+            plot(chemy,squeeze(feval(fabsorreal,fftshift(fft(tmpIn(params.ShowVoxels{CurVox}(1),params.ShowVoxels{CurVox}(2),params.ShowVoxels{CurVox}(3),:,params.ShowVoxels{CurVox}(4),1))) - fftshift(fft(tmpOut(params.ShowVoxels{CurVox}(1),params.ShowVoxels{CurVox}(2),params.ShowVoxels{CurVox}(3),:,params.ShowVoxels{CurVox}(4),1))))),'r')
+            plot(chemy,squeeze(feval(fabsorreal,fftshift(fft(tmpOut(params.ShowVoxels{CurVox}(1),params.ShowVoxels{CurVox}(2),params.ShowVoxels{CurVox}(3),:,params.ShowVoxels{CurVox}(4),1))))),'g')
+            hold off
+            title(sprintf('(%d,%d,%d,%d)', params.ShowVoxels{CurVox}(1), params.ShowVoxels{CurVox}(2), params.ShowVoxels{CurVox}(3), params.ShowVoxels{CurVox}(4)))
+        
+            
+        end
+    end
+
+
+
+
 end
 
 %% Subfunction: Calculate phase caused by field inhomogeneity

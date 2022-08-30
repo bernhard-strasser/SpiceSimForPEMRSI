@@ -87,6 +87,7 @@ ppmvec = ppmvec(1,:);
 
 clear AllMaps Tmp;
 
+B0Scale = 1; % How strong the B0 should be simulated. If 1, it's the (measured) LCModel-shift map
 
 
 if(DenoisingExample_flag)
@@ -153,7 +154,6 @@ if(DenoisingExample_flag)
     %% NAA, Cr, Cho
 
 
-
     PickComponents = 1:3;
     NoOfMetabos = numel(PickComponents);
 
@@ -187,12 +187,82 @@ if(DenoisingExample_flag)
 
     
 
+    %% Projection onto singular vectors vs spectral components
+    % Investigate why the SVD takes for all singular vectors spectral peaks from the whole spectral range, and not 
+    % SingularVector1st = NAA, SingularVector2nd = Cho, SingularVector3rd = Cr (or similar). The singular value decomposition tries
+    % to decompose the given signals in such singular vectors, that explains in decreasing order most of the ground truth signal.
+    % So lets compare how many singular (spectral) vectors we need to explain our data when projecting onto the singular vectors vs 
+    % when projecting onto a basis consisting of (NAA,Cr,Cho).
+    % Let's use a rank 1 model (all metabolite maps are that of NAA) to test that.
+    % Remark: For some reason, my projections on the individual components are giving weird results when projecting on all three metabolites.
+    % I guess I would need to account for the covariances between Cr and Cho (the projection on Cr also gives a bit of Cho and vice versa bc they are close)
+    
+    PickComponents = [1 2 3];
+    NoOfMetabos = numel(PickComponents);
+
+    CurMap = InData.Maps.Metabos(:,:,:,ones([1 NoOfMetabos])); CurMap = reshape(CurMap,[numel(CurMap)/NoOfMetabos NoOfMetabos]);
+    S = reshape(CurMap * InData.SpecComp(PickComponents,:),Par.DataSize);
+
+    
+    % Compare how well we can reproduce one voxel
+    [U,Sigma,V] = svd(reshape(S,[Par.Nx*Par.Ny Par.vecSize]),'econ');
+    V_DiffPeaks = InData.SpecComp(PickComponents,:)';
+    V_DiffPeaks = V_DiffPeaks ./ transpose(sqrt(diag(V_DiffPeaks' * V_DiffPeaks)));
+    
+    
+    % Calculate projections:
+    S_ProjSingVec = reshape( reshape(S,[64*64 1024]) * V(:,1) * (V(:,1))',[64 64 1 1024]);
+    S_ProjPeaks1 = reshape( reshape(S,[64*64 1024]) * V_DiffPeaks(:,1) * (V_DiffPeaks(:,1))',[64 64 1 1024]);
+    S_ProjPeaks12 = reshape( reshape(S,[64*64 1024]) * V_DiffPeaks(:,1:2) * (V_DiffPeaks(:,1:2))',[64 64 1 1024]);
+    S_ProjPeaks123 = reshape( reshape(S,[64*64 1024]) * V_DiffPeaks(:,1:3) * (V_DiffPeaks(:,1:3))',[64 64 1 1024]);
+    
+    % Add a bit of noise to S
+    S = S + 0.01*randn(size(S)) +1i*0.01*randn(size(S));
+    
+    % Plot voxel 32 32 1, together with the projections
+    figure; 
+    subplot(2,2,1); plot(ppmvec,real(squeeze(fftshift(fft(S(32,32,1,:)))))); hold on;
+    plot(ppmvec,real(squeeze(fftshift(fft(S_ProjSingVec(32,32,1,:))))),'r'); hold off;                   % Projection onto singular vectors
+    title('Proj on SingVector1')
+    
+    
+    subplot(2,2,2); plot(ppmvec,real(squeeze(fftshift(fft(S(32,32,1,:)))))); hold on;
+    plot(ppmvec,real(squeeze(fftshift(fft(S_ProjPeaks1(32,32,1,:))))),'r'); hold off;                   % Projection onto singular vectors
+    title('Proj on SpecComp1')
+    
+    subplot(2,2,3); plot(ppmvec,real(squeeze(fftshift(fft(S(32,32,1,:)))))); hold on;
+    plot(ppmvec,real(squeeze(fftshift(fft(S_ProjPeaks12(32,32,1,:))))),'r'); hold off;                   % Projection onto singular vectors
+    title('Proj on SpecComp1+2')
+    
+    subplot(2,2,4); plot(ppmvec,real(squeeze(fftshift(fft(S(32,32,1,:)))))); hold on;
+    plot(ppmvec,real(squeeze(fftshift(fft(S_ProjPeaks123(32,32,1,:))))),'r'); hold off;                   % Projection onto singular vectors
+    title('Proj on SpecComp1+2+3')
+    
+    
+    %% Another explanation 
+    % why the SVD does not just give the NAA, Cr, Cho signals:
+    % This should simply show how you can decompose a rank-1 3x3 matrix by either using the singular vector ([1 2 3]) to explain all rows,
+    % or by using three "basis vectors" (which could be e.g. the signals of Cr, Cho, NAA). When we chose the latter, we need three basis vectors,
+    % while for the singular vector we need only 1. So by chosing the singular vector as basis, we are more efficient and need a lower number of vectors
+    % to explain the same thing.
+   
+    
+    Test = [1 2 3; 2 4 6; 3 6 9];
+    BasisVec1 = [1 0 0];
+    BasisVec2 = [0 2 0];
+    BasisVec3 = [0 0 3];
+    BasisVec4 = [1 2 3];
+    
+    Test
+    Test_Rep2 = [BasisVec4; 2*BasisVec4; 3*BasisVec4]
+    Test_Rep1 = [BasisVec1+BasisVec2+BasisVec3; 2*(BasisVec1+BasisVec2+BasisVec3); 3*(BasisVec1+BasisVec2+BasisVec3)]
+    
 
     %% NAA, Cr, Cho + B0-Inhomogeneity
+    % What happens to the rank if we add B0-inhomogeneity?
 
     PickComponents = 1:3;
     NoOfMetabos = numel(PickComponents);
-    B0Scale = 1.5; % How strong the B0 should be simulated. If 1, it's the (measured) LCMode-shift map
 
     CurMap = InData.Maps.Metabos(:,:,:,PickComponents); CurMap = reshape(CurMap,[numel(CurMap)/NoOfMetabos NoOfMetabos]);
     S = reshape(CurMap * InData.SpecComp(PickComponents,:),Par.DataSize); clear CurMap
@@ -212,6 +282,7 @@ if(DenoisingExample_flag)
     
     
     %% NAA, Cr, Cho + B0-Inhomogeneity. Enforce rank = 3
+    % What happens if we enforce rank = 3 in case of B0-inhomogeneity?
 
     PickComponents = 1:3;
     NoOfMetabos = numel(PickComponents);
@@ -245,7 +316,8 @@ if(DenoisingExample_flag)
 
 
     %% NAA, Cr, Cho + residual water
-
+    % What happens if we add some water residuals? We use 10 water components for that, with noise-like metabolic maps
+    
     PickComponents = 1:13;
     NoOfMetabos = numel(PickComponents);
 
@@ -258,6 +330,7 @@ if(DenoisingExample_flag)
 
     
     %% NAA, Cr, Cho + residual water. Enforce rank = 3
+    % What happens if we enforce rank 3 on this dataset with residual water? The metabolites will be mostly gone, bc the water signal dominates the svd.
 
     PickComponents = 1:13;
     NoOfMetabos = numel(PickComponents);
@@ -278,7 +351,8 @@ if(DenoisingExample_flag)
 
 
     %% NAA, Cr, Cho + Noise
-
+    % What happens with the rank if we add noise to our data?
+    
     PickComponents = 1:3;
     NoOfMetabos = numel(PickComponents);
 

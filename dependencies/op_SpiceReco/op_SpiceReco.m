@@ -414,7 +414,7 @@ mrsiReconParams.LRTGVModelParams.max_taup = 8/16;%=1/16 % decrease if diverges  
 
 mrsiReconParams.mrProt.samplerate = 10^9/D2.Par.Dwelltimes(1);
 mrsiReconParams.mrProt.VSize = D2.Par.vecSize;
-mrsiReconParams.mu_tv = 3E-4;
+mrsiReconParams.mu_tv = 2E-4;
 
 mrsiReconParams.CSOperators = SpiceOperators;
 
