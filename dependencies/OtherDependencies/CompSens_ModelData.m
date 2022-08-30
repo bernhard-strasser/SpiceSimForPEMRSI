@@ -44,7 +44,7 @@ end
 %%
 
 
-if(strcmpi(Transj,'NoTransj') || strcmpi(Transj,'notransp')) % Going from UTS to NonCart k-space data
+if(strcmpi(Transj,'NoTransj') || strcmpi(Transj,'notransp')) % Going from UTS to k-space data
 
     % Input = U * Sigma
     % Output = SamplingOperator .* OffResoEffect ( sFT_iTokSpace (((U * Sigma) * V) ° B0) ) = Spiral-k-Space-Data = ModelFunction (U * Sigma)
@@ -55,8 +55,6 @@ if(strcmpi(Transj,'NoTransj') || strcmpi(Transj,'notransp')) % Going from UTS to
     % Mask Data
     Output = Output .* Operators.Mask;
     
-
-    
     % Apply B0-Effect
     Output = Output .* conj(Operators.B0CorrMat_Spec);
 
@@ -64,30 +62,18 @@ if(strcmpi(Transj,'NoTransj') || strcmpi(Transj,'notransp')) % Going from UTS to
     Output = Output .* conj(Operators.SensMap);
     
     
-%     % Inverse NUFFT (i-Space --> NonCart k-Space)
-%     Output = reshape(Output,[size(Operators.sft2_Oper,2) numel(Output)/size(Operators.sft2_Oper,2)]);
-%     Output = Operators.sft2_Oper * Output;
-%     Output = reshape(Output,[Operators.InDataSize]);
-    Output = fftshift(fftshift(fft(fft(ifftshift(ifftshift(Output,1),2),[],1),[],2),1),2)/sqrt(Operators.InDataSize(1)*Operators.InDataSize(2));
-%     Output = fftshift(fftshift(fft(fft(ifftshift(ifftshift(Output,1),2),[],1),[],2),1),2);
-%     Output = fftshift(fftshift(fft(fft(ifftshift(ifftshift(Output,1),2),[],1),[],2),1),2)*sqrt(Operators.InDataSize(1)*Operators.InDataSize(2));
+%     % Inverse FFT (i-Space --> k-Space)
+    Output = conj(Output);
+    Output = fftshift(fftshift(ifft(ifft(ifftshift(ifftshift(Output,1),2),[],1),[],2),1),2);
+    
     Output = reshape(Output,Operators.InDataSize);
 
-    
-%     dummy = Output(:,1);
-%     Output = fft(ifftshift(Operators.TiltTrajMat.*fftshift(ifft(Output,[],5),5),5),[],5);
-%     Output(:,1) = dummy;
 
     % FoVShift
     Output = Output .* conj(Operators.FoVShift);
     
     Output = Operators.SamplingOperator .* Output;
-    
-%     Output = reshape(Output,[numel(Output) 1]);    
-    
-
-    
-    
+ 
 
 else    % Going from NonCart k-space data to UTS
 
@@ -99,21 +85,15 @@ else    % Going from NonCart k-space data to UTS
     % FoVShift
     Output = Output .* (Operators.FoVShift);
     
-%     Output = reshape(Input,[size_MultiDims(Operators.DCFPreG,[1 2]) size_MultiDims(Operators.SamplingOperator,[3 4]) size(Operators.B0CorrMat_Spec,3) size(Operators.SensMap,4)]);
     Output = Operators.SamplingOperator .* Output;
     
-%     dummy = Output(:,1);
-%     Output = fft(ifftshift(conj(Operators.TiltTrajMat).*fftshift(ifft(Output,[],5),5),5),[],5);
-%     Output(:,1) = dummy;    
-    
-    % NUFFT (NonCart k-Space --> i-Space)
-%     Output = Output .* Operators.DCFPreG; % Apply PreGridding Density Comp
-%     Output = reshape(Output,[prod(Operators.InDataSize(1:2)) prod(Operators.InDataSize(3:end))] );
-% 	Output = Operators.sft2_Oper' * Output * size(Operators.sft2_Oper,2); %
-%     Output = reshape(Output,[Operators.OutDataSize Operators.InDataSize(end)] );
-    Output = fftshift(fftshift(ifft(ifft(ifftshift(ifftshift(Output,1),2),[],1),[],2),1),2)*sqrt(Operators.InDataSize(1)*Operators.InDataSize(2));
-%     Output = fftshift(fftshift(ifft(ifft(ifftshift(ifftshift(Output,1),2),[],1),[],2),1),2);
-%     Output = fftshift(fftshift(ifft(ifft(ifftshift(ifftshift(Output,1),2),[],1),[],2),1),2)/sqrt(Operators.InDataSize(1)*Operators.InDataSize(2));
+
+    % FFT (k-Space --> i-Space)
+
+    Output = fft(fft(ifftshift(ifftshift(Output,1),2),[],1),[],2);
+    Output = conj(Output);
+    Output = fftshift(fftshift(Output,1),2);
+
     Output = reshape(Output,Operators.OutDataSize);
     
     
@@ -123,27 +103,12 @@ else    % Going from NonCart k-space data to UTS
     Output = sum(Output .* Operators.SensMap,5);
     
     % Undo B0-Effect
-%     Output = reshape(Output,size(Operators.B0CorrMat_Spec));
     Output = Output .* Operators.B0CorrMat_Spec;
-
-    
-
-    
 
     % Mask Data
     Output = Output .* Operators.Mask;
     
-%     Output = reshape(Output,[numel(Output) 1]);
-    
-%     Output = conj(Output);
-    
-    
-    
 
-    
-    
-    
-    
     
 end
 

@@ -488,7 +488,6 @@ if(SpiceExample_flag)
 
 
     
-    D2.Data = conj(D2.Data);
 %     SpiceOperators.B0 = InData.Maps.B0; 
 %     SpiceOperators.SamplingOperator = SamplingOperator;
 
@@ -571,9 +570,6 @@ if(SpiceExample_flag)
     end   
 	clear params dWL d ConjFlag ConjSign CurCha Factor UseUintFun dOut
 
-    % Dummy correction. Don't know why this is necessary?!
-    D2.Data = D2.Data*sqrt(64*64/sum(D2.Mask(:)));
-    
     
     rmpath('./dependencies/op_NuisanceRemoval_HSVD_Sparse')
     addpath('./dependencies/op_NuisanceRemoval_HSVD')
@@ -667,9 +663,7 @@ if(SpiceExample_flag)
     D2SpiceReco.Par = D2.Par;
     D2SpiceReco.Par.DataSize = size(D2SpiceReco.Data);
     
-    
-    % Dummy correction. Don't know why this is necessary?!
-    D2SpiceReco.Data = D2SpiceReco.Data * 64;
+
     
     D2 = D2_bak;
     

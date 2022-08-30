@@ -42,7 +42,7 @@ function [y,yk] = subUAOp(x, opSign, params)
 %             temp = reshape(temp,[prod(params.Operators.OutDataSize(1:2)) numel(temp)/prod(params.Operators.OutDataSize(1:2))]);
 %             tktHr = params.Operators.sft2_Oper * temp;
 %             tktHr = fftshift(fftshift(fft(fft(ifftshift(ifftshift(temp,1),2),[],1),[],2),1),2)/sqrt(NyHr)/sqrt(NxHr);
-            tktHr = fftshift(fftshift(fft(fft(ifftshift(ifftshift(temp,1),2),[],1),[],2),1),2);
+            tktHr = fftshift(fftshift(ifft(ifft(ifftshift(ifftshift(conj(temp),1),2),[],1),[],2),1),2);
 
             % truncation
             yW                = tktHr(params.sampleIndex);
@@ -61,7 +61,7 @@ function [y,yk] = subUAOp(x, opSign, params)
 %             temp = reshape(temp,[prod(params.Operators.OutDataSize(1:2)) numel(temp)/prod(params.Operators.OutDataSize(1:2))]);
 %             tktHr = params.Operators.sft2_Oper * temp;
 %             tktHr = fftshift(fftshift(fft(fft(ifftshift(ifftshift(temp,1),2),[],1),[],2),1),2)/sqrt(NyHr)/sqrt(NxHr);
-            tktHr = fftshift(fftshift(fft(fft(ifftshift(ifftshift(temp,1),2),[],1),[],2),1),2);
+            tktHr = fftshift(fftshift(ifft(ifft(ifftshift(ifftshift(conj(temp),1),2),[],1),[],2),1),2);
 
             % truncation
             yL                = tktHr(params.sampleIndex);
@@ -80,7 +80,7 @@ function [y,yk] = subUAOp(x, opSign, params)
 %             temp = reshape(temp,[prod(params.Operators.OutDataSize(1:2)) numel(temp)/prod(params.Operators.OutDataSize(1:2))]);
 %             tktHr = params.Operators.sft2_Oper * temp;
 %             tktHr = fftshift(fftshift(fft(fft(ifftshift(ifftshift(temp,1),2),[],1),[],2),1),2)/sqrt(NyHr)/sqrt(NxHr);
-            tktHr = fftshift(fftshift(fft(fft(ifftshift(ifftshift(temp,1),2),[],1),[],2),1),2);
+            tktHr = fftshift(fftshift(ifft(ifft(ifftshift(ifftshift(conj(temp),1),2),[],1),[],2),1),2);
 
             % truncation
             yM                = tktHr(params.sampleIndex);
@@ -135,7 +135,7 @@ function [y,yk] = subUAOp(x, opSign, params)
 		% x to k
 %         ktHr = params.Operators.sft2_Oper * ImtHr;
 %         ktHr = fftshift(fftshift(fft(fft(ifftshift(ifftshift(ImtHr,1),2),[],1),[],2),1),2)/sqrt(NyHr)/sqrt(NxHr);
-        ktHr = fftshift(fftshift(fft(fft(ifftshift(ifftshift(ImtHr,1),2),[],1),[],2),1),2);
+        ktHr = fftshift(fftshift(ifft(ifft(ifftshift(ifftshift(conj(ImtHr),1),2),[],1),[],2),1),2);
 
 % 		ktHr                  = fft(fft(ImtHr,[],1),[],2)/sqrt(NyHr)/sqrt(NxHr);
 		% truncation
@@ -150,7 +150,7 @@ function [y,yk] = subUAOp(x, opSign, params)
         ktHr = reshape(ktHr,[params.Operators.OutDataSize(1:3) Nt]);
 
 %         ImtHr = fftshift(fftshift(ifft(ifft(ifftshift(ifftshift(ktHr,1),2),[],1),[],2),1),2)*sqrt(NyHr)*sqrt(NxHr);
-        ImtHr = fftshift(fftshift(ifft(ifft(ifftshift(ifftshift(ktHr,1),2),[],1),[],2),1),2);
+        ImtHr = fftshift(fftshift(conj(fft(fft(ifftshift(ifftshift(ktHr,1),2),[],1),[],2)),1),2);
 
         % Coil Combination
         ImtHr = sum(ImtHr .* params.Operators.SensMap,5);
