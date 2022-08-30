@@ -412,7 +412,9 @@ end
 
 if(SpiceExample_flag)
 
-    %% Calculate GroundTruth
+    %% Calculate GroundTruth & Definitions
+    
+    B0Scale = 1;
     
     PickComponents = 1:3;
     NoOfMetabos = numel(PickComponents);
@@ -422,8 +424,7 @@ if(SpiceExample_flag)
     SaveFigs.Name = 'NAACrCho_GroundTruth';
     
     
-    %% Spice Reco: Show D1 & D2
-
+    %% Spice Reco: Create D1 & D2 Data
     PickComponents = 1:13;
     NoOfMetabos = numel(PickComponents);
     CurMap = InData.Maps.Metabos(:,:,:,PickComponents); CurMap = reshape(CurMap,[numel(CurMap)/NoOfMetabos NoOfMetabos]);
@@ -431,7 +432,7 @@ if(SpiceExample_flag)
 
     % B0-Effect
     time   = (0:Par.vecSize-1)*(1/Par.SBW);
-    B0CorrMat_Spec = exp(2*pi*1i*InData.Maps.B0 .* reshape(time,[1 1 1 numel(time)]));
+    B0CorrMat_Spec = exp(2*pi*1i*InData.Maps.B0*B0Scale .* reshape(time,[1 1 1 numel(time)]));
     S = S .* B0CorrMat_Spec;
     clear B0CorrMat_Spec time;
 
@@ -491,8 +492,10 @@ if(SpiceExample_flag)
 %     SpiceOperators.B0 = InData.Maps.B0; 
 %     SpiceOperators.SamplingOperator = SamplingOperator;
 
-    params.RM = 3;
-    params.RW = 10; 
+    MetaboR = 5;
+
+    params.RM = MetaboR;
+    params.RW = 15; 
     params.RL = 0;
     
     params.tD1 = (0:D1Reco.Par.Dwelltimes(1):D1Reco.Par.Dwelltimes(1)*(D1Reco.Par.vecSize-1))/10^9;
@@ -503,7 +506,7 @@ if(SpiceExample_flag)
     params.ND2 = D2.Par.DataSize([1 2 4]);
     params.ImMask = D2.Mask;         % This needs to be brain + lipids mask, bc in nsRmSparseInitParams the lipmask is calculated lipmask = ImMask - waterMask;
     params.waterMask = D2.Mask; % This needs to be the brain-mask (NOT brain + lipids!) 
-    params.B0Map = InData.Maps.B0;  
+    params.B0Map = InData.Maps.B0*B0Scale;  
     params.NosD1 = 1;
     params.dt = D1Reco.Par.Dwelltimes(1)/10^9;
     params.lambdaDfWat = 0; params.lambdaDfLip = 0; params.lambdaDfMet = 0;
@@ -524,7 +527,7 @@ if(SpiceExample_flag)
     ConjSign = (-1)^(double(ConjFlag));
     
     params.optWat.fSel = [80 -80];
-    params.optWat.fSel2 = sort(ConjSign*([4.4,  5.0] - 4.65)*Factor);
+    params.optWat.fSel2 = sort(ConjSign*([4.2,  5.2] - 4.65)*Factor);
     params.optWat.maxT2 = [1e6];
 %     params.optLip.fSel2 = sort(ConjSign*(SettingsTemp.NuisRem_D1{1}.LipidPPMs([1:2:numel(SettingsTemp.NuisRem_D1{1}.LipidPPMs) numel(SettingsTemp.NuisRem_D1{1}.LipidPPMs)]) - 4.65)*Factor);
 %     params.optLip.maxT2 = SettingsTemp.NuisRem_D1{1}.LipidT2s;
@@ -551,11 +554,13 @@ if(SpiceExample_flag)
     params.verbose = 0;
 
 
-    params.MaxIterCG = 13;
+    params.MaxIterCG = 100;
     params.D1RecoPar = D1Reco.Par;
     params.ND2In = D2.Par.DataSize(1:2);
   
-    
+    params.ShowSpectra_flag = 1;
+    params.ShowVoxels = {[32 32 1], [32 33 1], [33 32 1],[33 33 1]};
+    params.tolCG = 1E-10;
     
     
     for CurCha = 1:1
@@ -595,7 +600,7 @@ if(SpiceExample_flag)
     SpiceOperators.Mask = D2.Mask;
     
     time   = (0:SpiceOperators.OutDataSize(4)-1)*D2.Par.Dwelltimes(1)/10^9; time = reshape(time,[1 1 1 numel(time)]);
-    B0CorrMat_Spec = exp(2*pi*1i*InData.Maps.B0 .* time);
+    B0CorrMat_Spec = exp(-2*pi*1i*InData.Maps.B0 *B0Scale .* time);
     SpiceOperators.B0CorrMat_Spec = B0CorrMat_Spec;
     clear time B0CorrMat_Spec;
     
@@ -614,7 +619,7 @@ if(SpiceExample_flag)
     % Remove Nuisance Signal
     Settings.Spice.NuisRem_D1{1}.Flag = true;     
     Settings.Spice.NuisRem_D1{1}.NoOfSingVals = 15;
-    Settings.Spice.NuisRem_D1{1}.WaterPPMs = [5.9, 4.4]; % Originally had: [8.0, 3.8386; 3.8386, 3.6764]. Results in same as original-nsrm: [5.463, 5.3; 5.3, 3.024]
+    Settings.Spice.NuisRem_D1{1}.WaterPPMs = [5.9, 4.2]; % Originally had: [8.0, 3.8386; 3.8386, 3.6764]. Results in same as original-nsrm: [5.463, 5.3; 5.3, 3.024]
     Settings.Spice.NuisRem_D1{1}.WaterT2s = [1e6]; % [1e6;20]
     Settings.Spice.NuisRem_D1{1}.LipidPPMs = [8.7069, 8.7069];
     Settings.Spice.NuisRem_D1{1}.LipidT2s = [-2000];
@@ -631,15 +636,15 @@ if(SpiceExample_flag)
     Settings.Spice.ExpFilter_D1 = struct('Flag',false,'ApplyAlongDim',4,'ExpFilterStrength_Hz',-10);
     
     % Rank for estimated phi
-    Settings.Spice.Denoise_D1.MaxRankL = 3;
-    Settings.Spice.Denoise_D1.MinRankL = 3;
+    Settings.Spice.Denoise_D1.MaxRankL = MetaboR;
+    Settings.Spice.Denoise_D1.MinRankL = MetaboR;
     Settings.Spice.Denoise_D1.Debug_flag = false;
 
     % NuisRemance of D2
     Settings.Spice.NuisRem_D2.NuisRem_flag = false;
 
     % IterReco
-    Settings.Spice.IterReco.Iterations = 15;
+    Settings.Spice.IterReco.Iterations = 100;
     Settings.Spice.IterReco.Tolerance = 10^-6;
 
     % Resynthesize
@@ -654,7 +659,7 @@ if(SpiceExample_flag)
 
 
     % RECO: Perform SPICE Reconstruction
-    TmpB0.B0Map = -InData.Maps.B0;
+    TmpB0.B0Map = -InData.Maps.B0*B0Scale;
     [D2SpiceReco, SpiceAddOutput] = op_SpiceReco(D1ForSpice,D2,TmpB0,ModelFunction,SpiceOperators,Settings.Spice);
 
     D2SpiceReco.Mask = D2.Mask;
