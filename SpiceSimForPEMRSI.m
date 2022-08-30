@@ -25,7 +25,7 @@ ParD1 = Par;
 ParD1.Nx = 22;  ParD1.Ny = 22; ParD1.Nz = 1; ParD1.vecSize = 1024;
 ParD1.DataSize = [ParD1.Nx ParD1.Ny ParD1.Nz ParD1.vecSize];
 
-TimeUndersamplFactor = 3;
+TimeUndersamplFactor = 2;
 
 CalcMapsSetts.NAA.SumFromToPPM = [2.01-0.1 2.01+0.1];
 CalcMapsSetts.Cho.SumFromToPPM = [3.21-0.1 3.21+0.1];
@@ -43,6 +43,16 @@ load('InData.mat');
 
 % Take only some Metabolites
 TakeOnlyMetabos = [20 21 23];
+
+% Misuse metabolic maps for the following metabolites to use as water residual maps of different components:
+% Glc, Asp, GSH, Gln, Ins, MM_mea, Scyllo-Inositol, Glu, Ins+Gly, Glx
+% Remark: Using random water maps doesnt work properly, because when I calculate the low-res D1 dataset, it will smear all those water-components, and the
+% smearing will be very strong when using noise (the low-res representation of noise is not accurate in comparison to the original high-res noise).
+% This will cause problems when removing the water. That's why I changed now to using metabolite maps for water-maps, where the low-res representation
+% is much more truthful to the original.
+WaterMaps = reshape(InData.Maps.Metabos(:,:,1,[1 2 6 7 8 9 14 17 22 24]),[Par.Nx Par.Ny 1 10]);
+% WaterMaps = randn([size(InData.Maps.Mask) 1 10]) .* reshape(1:-0.1:0.1,[1 1 1 10]);
+
 InData.Maps.Metabos = InData.Maps.Metabos(:,:,1,TakeOnlyMetabos);
 
 % Convert B0-map ppm --> Hz
@@ -79,7 +89,6 @@ InData.SpecComp(12,:) = Tmp(2,:);
 Tmp = Simulate_FID_Spectra(4.57,4.65,-3,0,0.03,4,0,1/Par.SBW,Par.vecSize,Par.LarmorFreq);            % Residual Water 10
 InData.SpecComp(13,:) = Tmp(2,:);
 
-WaterMaps = randn([size(InData.Maps.Mask) 1 10]) .* reshape(1:-0.1:0.1,[1 1 1 10]);
 InData.Maps.Metabos = cat(4,InData.Maps.Metabos,WaterMaps); clear WaterMaps
 
 
@@ -310,7 +319,7 @@ if(DenoisingExample_flag)
     SaveFigs.Name = 'NAACrCho_B0_EnforceRank3';
     ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs)
 
-    figure; imagesc(InData.Maps.B0*B0Scale); colorbar
+    figure; imagesc(InData.Maps.B0*B0Scale); colorbar, title('B0 map')
 
 
 
@@ -358,16 +367,17 @@ if(DenoisingExample_flag)
 
     CurMap = InData.Maps.Metabos(:,:,:,PickComponents); CurMap = reshape(CurMap,[numel(CurMap)/NoOfMetabos NoOfMetabos]); 
     S = reshape(CurMap * InData.SpecComp(PickComponents,:),Par.DataSize); clear CurMap
+    S_GroundTruth = S;
 
 
     % Add Noise
-    NoiseScale = 0.25;
+    NoiseScale = 0.25; 
     S = S + NoiseScale*randn(size(S)) + NoiseScale*1i*randn(size(S));
-
+    S_NoisyFullRank = S;
 
     Results = CalcResults(S,InData.Maps.Mask,Par,CalcMapsSetts,ppmvec,Results_GroundTruth);
     SaveFigs.Name = ['NAACrCho_Noise_Scale' num2str(NoiseScale)];
-    ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs)
+    ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs,'Noisy Data')
 
 
 
@@ -385,7 +395,15 @@ if(DenoisingExample_flag)
     Results = CalcResults(S,InData.Maps.Mask,Par,CalcMapsSetts,ppmvec,Results_GroundTruth);
     SaveFigs.Name = ['NAACrCho_Noise_Scale' num2str(NoiseScale) '_Denoised'];
 
-    ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs)
+    ShowResults(Results,PlotSpecs,ppmvec,S,SaveFigs,'Denoised Data')
+
+    
+    
+    %% How Does the Spectral Residuals Look Like?
+    % Is the noise evenly distributed in the spectrum?
+    
+    ShowResults(Results,PlotSpecs,ppmvec,S-S_GroundTruth,SaveFigs,'Denoised - GroundTruth')
+    ShowResults(Results,PlotSpecs,ppmvec,S-S_NoisyFullRank,SaveFigs,'Denoised - Noisy')    
     
 
 end
@@ -654,18 +672,18 @@ if(SpiceExample_flag)
     %% Spice Reco: Show results:
     
     % GroundTruth
-    ShowResults(Results_GroundTruth,PlotSpecs,ppmvec,S_GroundTruth,false)
+    ShowResults(Results_GroundTruth,PlotSpecs,ppmvec,S_GroundTruth,false,'GroundTruth D2')
 
     
     Results = CalcResults(D1Reco_zf.Data,D2.Mask,D1Reco_zf.Par,CalcMapsSetts,ppmvec,Results_GroundTruth);
     SaveFigs.Name = ['NAACrCho_D1'];
-    ShowResults(Results,PlotSpecs,ppmvec,D1Reco_zf.Data,SaveFigs)
+    ShowResults(Results,PlotSpecs,ppmvec,D1Reco_zf.Data,SaveFigs,'GroundTruth D1')
     % Show D2BefNuisRem
     D2Reco = D2;
     D2Reco.Data = FFTOfMRIData(D2_BefNuisRem.Data,1,[1 2],0,1,0);    
     Results = CalcResults(D2Reco.Data,D2Reco.Mask,D2Reco.Par,CalcMapsSetts,ppmvec,Results_GroundTruth);
     SaveFigs.Name = ['NAACrCho_D2'];
-    ShowResults(Results,PlotSpecs,ppmvec,D2Reco.Data,SaveFigs)    
+    ShowResults(Results,PlotSpecs,ppmvec,D2Reco.Data,SaveFigs,'D2 BeforeReco')    
 
     clear D2Reco;
     
@@ -676,19 +694,22 @@ if(SpiceExample_flag)
         subplot(4,4,ii); plot(ppmvec,abs(fftshift(fft(nsRmSparseOutput.VWD1(ii,:))))); title(['H2OSpecComp' num2str(ii)])        
     end
     MetPhi1Fig = figure;
+    SubPlotSize = ceil(sqrt(size(nsRmSparseOutput.VMD1,1)));
     for ii = 1:size(nsRmSparseOutput.VMD1,1)
-        subplot(2,2,ii); plot(ppmvec,abs(fftshift(fft(nsRmSparseOutput.VMD1(ii,:))))); title(['MetSpecComp' num2str(ii)])        
+        subplot(SubPlotSize,SubPlotSize,ii); plot(ppmvec,abs(fftshift(fft(nsRmSparseOutput.VMD1(ii,:))))); title(['MetSpecComp' num2str(ii)])        
     end
 
     % Metabo & Water gammas (spatial components)
     Tmp = reshape(nsRmSparseOutput.xSol,[D2.Par.DataSize(1) D2.Par.DataSize(1) size(nsRmSparseOutput.VWD1,1)+size(nsRmSparseOutput.VMD1,1)]) .* D2.Mask;
     H2OGamma1Fig = figure;
+    SubPlotSize = ceil(sqrt(size(nsRmSparseOutput.VWD1,1)));    
     for ii = 1:size(nsRmSparseOutput.VWD1,1)
-        subplot(4,4,ii); imagesc(abs(Tmp(:,:,ii))); title(['H2OSpatComp' num2str(ii)])
+        subplot(SubPlotSize,SubPlotSize,ii); imagesc(abs(Tmp(:,:,ii))); title(['H2OSpatComp' num2str(ii)])
     end
     MetGamma1Fig = figure;
-    for ii = 11:size(nsRmSparseOutput.VWD1,1)+size(nsRmSparseOutput.VMD1,1)
-        subplot(2,2,ii-size(nsRmSparseOutput.VWD1,1)); imagesc(abs(Tmp(:,:,ii))); title(['MetSpatComp' num2str(ii-size(nsRmSparseOutput.VWD1,1))])
+    SubPlotSize = ceil(sqrt(size(nsRmSparseOutput.VMD1,1)));
+    for ii = (size(nsRmSparseOutput.VWD1,1)+1):size(nsRmSparseOutput.VWD1,1)+size(nsRmSparseOutput.VMD1,1)
+        subplot(SubPlotSize,SubPlotSize,ii-size(nsRmSparseOutput.VWD1,1)); imagesc(abs(Tmp(:,:,ii))); title(['MetSpatComp' num2str(ii-size(nsRmSparseOutput.VWD1,1))])
     end    
   
     
@@ -697,7 +718,7 @@ if(SpiceExample_flag)
     D2NuisRemReco.Data = FFTOfMRIData(conj(D2.Data),1,[1 2],0,1,0);    
     Results = CalcResults(D2NuisRemReco.Data,D2NuisRemReco.Mask,D2NuisRemReco.Par,CalcMapsSetts,ppmvec,Results_GroundTruth);
     SaveFigs.Name = ['NAACrCho_D2NuisRem'];
-    ShowResults(Results,PlotSpecs,ppmvec,D2NuisRemReco.Data,SaveFigs)    
+    ShowResults(Results,PlotSpecs,ppmvec,D2NuisRemReco.Data,SaveFigs,'D2 NuisRem')    
 
     
     % Show D1NuisRem
@@ -706,12 +727,12 @@ if(SpiceExample_flag)
     D1NuisRemReco.Mask = D2.Mask; D1NuisRemReco.Par = D2.Par;
     Results = CalcResults(D1NuisRemReco.Data,D1NuisRemReco.Mask,D1NuisRemReco.Par,CalcMapsSetts,ppmvec,Results_GroundTruth);
     SaveFigs.Name = ['NAACrCho_D1NuisRem'];
-    ShowResults(Results,PlotSpecs,ppmvec,D1NuisRemReco.Data,SaveFigs)    
+    ShowResults(Results,PlotSpecs,ppmvec,D1NuisRemReco.Data,SaveFigs,'D1 NuisRem')    
             
     
     % Show Metabo phis from D1NuisRem
     MetPhi2Fig = figure;
-    SubplotNo = ceil(round(sqrt(size(SpiceAddOutput.Phi{1},1))));
+    SubplotNo = ceil(sqrt(size(SpiceAddOutput.Phi{1},1)));
     for ii = 1:size(SpiceAddOutput.Phi{1},1)
         subplot(SubplotNo,SubplotNo,ii); plot(ppmvec,abs(fftshift(fft(SpiceAddOutput.Phi{1}(ii,:))))); title(['MetSpecComp' num2str(ii)])        
     end    
@@ -728,8 +749,11 @@ if(SpiceExample_flag)
 %     D2NuisRemReco.Data = FFTOfMRIData(D2.Data,1,[1 2],0,1,0);    
     Results = CalcResults(D2SpiceReco.Data,D2SpiceReco.Mask,D2SpiceReco.Par,CalcMapsSetts,ppmvec,Results_GroundTruth);
     SaveFigs.Name = ['NAACrCho_SpiceReco'];
-    ShowResults(Results,PlotSpecs,ppmvec,D2SpiceReco.Data,SaveFigs)    
+    ShowResults(Results,PlotSpecs,ppmvec,D2SpiceReco.Data,SaveFigs,'Spice Reco')    
             
+    %
+    Results = CalcResults(D2SpiceReco.Data - S_GroundTruth,D2SpiceReco.Mask,D2SpiceReco.Par,CalcMapsSetts,ppmvec,Results_GroundTruth);
+    ShowResults(Results,PlotSpecs,ppmvec,D2SpiceReco.Data,SaveFigs,'Spice Reco - GT')    
     
     
     if(SaveFigs.Flag)
@@ -762,7 +786,7 @@ end
 
 
 %% Function for Plotting Results
-function ShowResults(Results,PlotSpecs, ppmvec,S,SaveFigs)
+function ShowResults(Results,PlotSpecs, ppmvec,S,SaveFigs,SpecTitle)
 
     if(~isstruct(SaveFigs))
         Tmp = SaveFigs; clear SaveFigs; SaveFigs.Flag = Tmp; clear Tmp;
@@ -782,6 +806,9 @@ function ShowResults(Results,PlotSpecs, ppmvec,S,SaveFigs)
     imagesc(Results.ChoMap); title(['ChoMap, RMSE = ' num2str(Results.RMSEs.Cho)]), xticks([]); yticks([]) %, axis square
     subplot(3,2,2)
     plot(ppmvec,real(squeeze(fftshift(fft(S(PlotSpecs{1}(1),PlotSpecs{1}(2),1,:),[],4),4))),'LineWidth',1.5), yticks([]), xlim([1 5.5])
+    if(exist('SpecTitle','var') && ~isempty(SpecTitle))
+        title(SpecTitle) 
+    end
     subplot(3,2,4)
     plot(ppmvec,real(squeeze(fftshift(fft(S(PlotSpecs{2}(1),PlotSpecs{2}(2),1,:),[],4),4))),'LineWidth',1.5), yticks([]), xlim([1 5.5])
     subplot(3,2,6)
