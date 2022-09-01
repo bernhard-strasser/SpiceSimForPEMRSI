@@ -387,7 +387,7 @@ if(DenoisingExample_flag)
     AssumedRank = NoOfMetabos;
 
 
-    % Denoise
+    % Denoise    
     [U,Sigma,V] = svd(reshape(S,[Par.Nx*Par.Ny Par.vecSize]),'econ');
     S = U(:,1:AssumedRank) * Sigma(1:AssumedRank,1:AssumedRank) * V(:,1:AssumedRank)';
     S = reshape(S,Par.DataSize); clear CurMap
@@ -406,6 +406,54 @@ if(DenoisingExample_flag)
     ShowResults(Results,PlotSpecs,ppmvec,S-S_NoisyFullRank,SaveFigs,'Denoised - Noisy')    
     
 
+    
+    %% Monte Carlo Simulations
+    % To investigate how accurate on average we can reconstruct different datapoints in the spectra (i.e. the error of different points in the spectra).
+    % Is there a bias? Can we reconstruct different parts of the spectra better than others?
+    
+    TotalMonteCarloIterations = 100;
+    PickComponents = 1:3;
+    NoOfMetabos = numel(PickComponents);
+    AssumedRank = NoOfMetabos;
+
+    
+    CurMap = InData.Maps.Metabos(:,:,:,PickComponents); CurMap = reshape(CurMap,[numel(CurMap)/NoOfMetabos NoOfMetabos]); 
+    S_GroundTruth = reshape(CurMap * InData.SpecComp(PickComponents,:),Par.DataSize); clear CurMap
+
+    NoiseScale = 0.25; 
+
+    S_NoisyFullRank = zeros([Par.DataSize TotalMonteCarloIterations]);
+    S_NoiseLowRank = S_NoisyFullRank;
+    for ii = 1:TotalMonteCarloIterations
+        
+        % Add Noise
+        S = S_GroundTruth + NoiseScale*randn(size(S_GroundTruth)) + NoiseScale*1i*randn(size(S_GroundTruth));
+        S_NoisyFullRank(:,:,:,:,ii) = S;
+
+        % Denoise
+        [U,Sigma,V] = svd(reshape(S,[Par.Nx*Par.Ny Par.vecSize]),'econ');
+        S = U(:,1:AssumedRank) * Sigma(1:AssumedRank,1:AssumedRank) * V(:,1:AssumedRank)';
+        S_NoiseLowRank(:,:,:,:,ii) = reshape(S,Par.DataSize); clear CurMap        
+    
+    end
+    
+    
+    % Uncertainity in FID
+    FullRankError = std(S_NoisyFullRank,[],5);
+    LowRankError = std(S_NoiseLowRank,[],5);
+
+    % Uncertainity in Spectra   
+    FullRankError_Spec = std(fftshift(fft(S_NoisyFullRank,[],4),4),[],5);
+    LowRankError_Spec = std(fftshift(fft(S_NoiseLowRank,[],4),4),[],5);
+    
+    figure;
+    subplot(2,2,1); plot(real(squeeze(FullRankError(33,33,1,:)))), title('Full Rank FID Error')
+    subplot(2,2,2); plot(real(squeeze(LowRankError(33,33,1,:)))), title('Low Rank FID Error')
+    subplot(2,2,3); plot(ppmvec,real(squeeze(FullRankError_Spec(33,33,1,:)))), title('Full Rank Spec Error')
+    subplot(2,2,4); plot(ppmvec,real(squeeze(LowRankError_Spec(33,33,1,:)))), title('Low Rank Spec Error')
+        
+    
+    
 end
 
 
@@ -596,7 +644,7 @@ if(SpiceExample_flag)
     SpiceOperators.Mask = D2.Mask;
     
     time   = (0:SpiceOperators.OutDataSize(4)-1)*D2.Par.Dwelltimes(1)/10^9; time = reshape(time,[1 1 1 numel(time)]);
-    B0CorrMat_Spec = exp(-2*pi*1i*InData.Maps.B0 *B0Scale .* time);
+    B0CorrMat_Spec = exp(-2*pi*1i*InData.Maps.B0 *B0Scale .* time);     % Needs to be inverse from above B0CorrMat_Spec to undo its effects.
     SpiceOperators.B0CorrMat_Spec = B0CorrMat_Spec;
     clear time B0CorrMat_Spec;
     
@@ -804,14 +852,14 @@ function ShowResults(Results,PlotSpecs, ppmvec,S,SaveFigs,SpecTitle)
     subplot(3,2,5)
     imagesc(Results.ChoMap); title(['ChoMap, RMSE = ' num2str(Results.RMSEs.Cho)]), xticks([]); yticks([]) %, axis square
     subplot(3,2,2)
-    plot(ppmvec,real(squeeze(fftshift(fft(S(PlotSpecs{1}(1),PlotSpecs{1}(2),1,:),[],4),4))),'LineWidth',1.5), yticks([]), xlim([1 5.5])
+    plot(ppmvec,real(squeeze(fftshift(fft(S(PlotSpecs{1}(1),PlotSpecs{1}(2),1,:),[],4),4))),'LineWidth',1.5), xlim([1 5.5])
     if(exist('SpecTitle','var') && ~isempty(SpecTitle))
         title(SpecTitle) 
     end
     subplot(3,2,4)
-    plot(ppmvec,real(squeeze(fftshift(fft(S(PlotSpecs{2}(1),PlotSpecs{2}(2),1,:),[],4),4))),'LineWidth',1.5), yticks([]), xlim([1 5.5])
+    plot(ppmvec,real(squeeze(fftshift(fft(S(PlotSpecs{2}(1),PlotSpecs{2}(2),1,:),[],4),4))),'LineWidth',1.5), xlim([1 5.5])
     subplot(3,2,6)
-    plot(ppmvec,real(squeeze(fftshift(fft(S(PlotSpecs{3}(1),PlotSpecs{3}(2),1,:),[],4),4))),'LineWidth',1.5), yticks([]), xlim([1 5.5])
+    plot(ppmvec,real(squeeze(fftshift(fft(S(PlotSpecs{3}(1),PlotSpecs{3}(2),1,:),[],4),4))),'LineWidth',1.5), xlim([1 5.5])
     
     fprintf('\nDataset %s has rank: %d',SaveFigs.Name,Results.Rank)
     
